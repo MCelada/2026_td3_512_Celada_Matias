@@ -1,11 +1,6 @@
-#ifndef EEPROM_MANAGER_H
-#define EEPROM_MANAGER_H
+#include "driver/i2c.h"
+#include "esp_log.h"
+#include <stdio.h>
 
-#include "system_manager.h" 
-#include <stdbool.h>
-
-void eeprom_init(void);
-void eeprom_save_config(system_mode_t mode, float setpoint_cc, float setpoint_cr);
-bool eeprom_load_config(system_mode_t *mode, float *setpoint_cc, float *setpoint_cr);
-
-#endif
+esp_err_t eeprom_write_byte(uint16_t mem_addr, uint8_t data);
+esp_err_t eeprom_read_byte(uint16_t mem_addr, uint8_t *data);

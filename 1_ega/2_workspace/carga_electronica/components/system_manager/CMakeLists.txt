@@ -1,3 +1,3 @@
 idf_component_register(SRCS "system_manager.c"
                     INCLUDE_DIRS "include"
-                    REQUIRES encoder adc_sensor display_tft eeprom)
+                    REQUIRES adc_sensor encoder display_tft)
