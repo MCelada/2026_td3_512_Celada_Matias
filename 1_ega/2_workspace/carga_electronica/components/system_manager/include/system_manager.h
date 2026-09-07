@@ -19,6 +19,7 @@ typedef enum {
     SYSMAN_MSG_SETPOINT_CHANGE,
     SYSMAN_MSG_ADC_UPDATE,
     SYSMAN_MSG_ALARM_LIMIT_CHANGE,
+    SYSMAN_MSG_ARM_ALARMS,
 } sysman_msg_type_t;
 
 typedef struct {

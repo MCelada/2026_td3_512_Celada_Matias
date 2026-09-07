@@ -5774,6 +5774,16 @@
 			(embedded_fonts no)
 		)
 	)
+	(text "EGA - CARGA ELECTRONICA"
+		(exclude_from_sim no)
+		(at 229.108 173.736 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+			)
+		)
+		(uuid "a7f10c4d-4ad9-4243-8f37-c7c77c4c9195")
+	)
 	(text "10ohm"
 		(exclude_from_sim no)
 		(at 241.935 76.835 0)
@@ -5975,6 +5985,16 @@
 	)
 	(wire
 		(pts
+			(xy 86.36 68.58) (xy 93.98 68.58)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "04506ba7-4af8-448d-9659-8cb9fdadd35e")
+	)
+	(wire
+		(pts
 			(xy 29.21 121.92) (xy 33.02 121.92)
 		)
 		(stroke
@@ -6065,6 +6085,16 @@
 	)
 	(wire
 		(pts
+			(xy 36.83 78.74) (xy 40.64 78.74)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "189f3376-06c2-4148-ad54-7559028fd944")
+	)
+	(wire
+		(pts
 			(xy 27.94 97.79) (xy 33.02 97.79)
 		)
 		(stroke
@@ -6122,6 +6152,16 @@
 			(type default)
 		)
 		(uuid "25dfec80-6b6d-4fd3-8fa8-1ce5336b9c93")
+	)
+	(wire
+		(pts
+			(xy 36.83 76.2) (xy 40.64 76.2)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "29c13ce2-c984-445f-a880-94d84c58255c")
 	)
 	(wire
 		(pts
@@ -6502,6 +6542,16 @@
 			(type default)
 		)
 		(uuid "7468b8da-7315-4407-92c3-111ccd26feb0")
+	)
+	(wire
+		(pts
+			(xy 86.36 71.12) (xy 93.98 71.12)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "74c1b6ee-157e-48ef-9c24-7a63165977ce")
 	)
 	(wire
 		(pts
@@ -7133,6 +7183,36 @@
 		)
 		(uuid "ffaa3be6-7499-459d-9d61-3433202818f3")
 	)
+	(label "UART_TX"
+		(at 93.98 68.58 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "1d0fc36a-ae6b-4026-a423-cc9cbd33bf6b")
+	)
+	(label "UART_RX"
+		(at 93.98 71.12 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "1db29e11-0649-4978-85f5-663924808839")
+	)
+	(label "I2C1_SDA"
+		(at 36.83 76.2 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "29bc721b-a1ca-4d34-8eb3-13256560daf2")
+	)
 	(label "Vin"
 		(at 259.715 48.895 0)
 		(effects
@@ -7142,6 +7222,16 @@
 			(justify left bottom)
 		)
 		(uuid "3d0dd42d-a5c3-446a-b578-8a63c6ef96e3")
+	)
+	(label "I2C1_SCL"
+		(at 36.83 78.74 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "7cf712d2-3d37-4e91-9180-f550f98e00da")
 	)
 	(global_label "I2C0_SCL"
 		(shape input)

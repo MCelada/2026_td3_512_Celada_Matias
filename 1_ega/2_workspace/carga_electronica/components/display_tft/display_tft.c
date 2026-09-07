@@ -88,9 +88,9 @@ static void display_init (void)
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_ili9341(io_handle, &panel_config, &lcd_panel_handle));
 
-    ESP_ERROR_CHECK(esp_lcd_panel_reset(lcd_panel_handle));
-    ESP_ERROR_CHECK(esp_lcd_panel_init(lcd_panel_handle));
-    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(lcd_panel_handle, true));
+    esp_lcd_panel_reset(lcd_panel_handle);
+    esp_lcd_panel_init(lcd_panel_handle);
+    esp_lcd_panel_disp_on_off(lcd_panel_handle, true);
 }
 
 static bool notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
@@ -143,8 +143,6 @@ static void lvgl_tick(void *arg)
 
 static void display_and_lvgl_init(void)
 {
-    _lock_init(&lvgl_api_lock);
-
     display_init();
     
     lv_init();
@@ -265,21 +263,21 @@ static void on_slider_changed(lv_event_t * e)
         msg.type = SYSMAN_MSG_SETPOINT_CHANGE;
         msg.data.new_setpoint = (float)val; 
         if (ui_Resistencia_set) {
-            lv_label_set_text_fmt(ui_Resistencia_set, "%.0f Ohm", msg.data.new_setpoint);
+            lv_label_set_text_fmt(ui_Resistencia_set, "%ld Ohm", (long)val);
         }
     } 
     else if (slider == ui_bar_voltaje) {
         msg.type = SYSMAN_MSG_SETPOINT_CHANGE;
         msg.data.new_setpoint = (float)val / 100.0f; 
         if (ui_voltaje_set) {
-            lv_label_set_text_fmt(ui_voltaje_set, "%.2f V", msg.data.new_setpoint);
+            lv_label_set_text_fmt(ui_voltaje_set, "%ld.%02ld V", (long)(val / 100), (long)(val % 100));
         }
     } 
     else if (slider == ui_bar_corriente) {
         msg.type = SYSMAN_MSG_SETPOINT_CHANGE;
         msg.data.new_setpoint = (float)val / 1000.0f;
         if (ui_voltaje_set1) {
-            lv_label_set_text_fmt(ui_voltaje_set1, "%.3f A", msg.data.new_setpoint);
+            lv_label_set_text_fmt(ui_voltaje_set1, "%ld.%03ld A", (long)(val / 1000), (long)(val % 1000));
         }
     }
     
@@ -292,7 +290,7 @@ static void on_slider_changed(lv_event_t * e)
         msg.data.alarm_limit.type = ALARM_OVP;
         msg.data.alarm_limit.new_limit = (float)val / 100.0f; // Slider is 0-1500 for 15.00V? Assumed.
         if (ui_voltaje_lim_set) {
-            lv_label_set_text_fmt(ui_voltaje_lim_set, "%.2f V", msg.data.alarm_limit.new_limit);
+            lv_label_set_text_fmt(ui_voltaje_lim_set, "%ld.%02ld V", (long)(val / 100), (long)(val % 100));
         }
     }
     else if (slider == ui_bar_corr_limit) {
@@ -300,7 +298,7 @@ static void on_slider_changed(lv_event_t * e)
         msg.data.alarm_limit.type = ALARM_OCP;
         msg.data.alarm_limit.new_limit = (float)val / 1000.0f; // Slider is 0-500 for 500mA
         if (ui_corr_limit_set) {
-            lv_label_set_text_fmt(ui_corr_limit_set, "%.3f A", msg.data.alarm_limit.new_limit);
+            lv_label_set_text_fmt(ui_corr_limit_set, "%ld.%03ld A", (long)(val / 1000), (long)(val % 1000));
         }
     }
 
@@ -319,6 +317,8 @@ static void ui_event_inicio_de_programa(lv_event_t * e)
     if(event_code == LV_EVENT_CLICKED) {
         uint16_t selected = lv_roller_get_selected(ui_inicio_de_programa);
         if(selected == 0) { // INICIAR
+            sysman_msg_t msg = {.type = SYSMAN_MSG_ARM_ALARMS};
+            xQueueSend(sysman_queue, &msg, 0);
             lv_screen_load(ui_Running);
         }
         else if(selected == 1) { // CONFIGURAR
@@ -338,6 +338,8 @@ static void ui_event_start_running(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
     if(event_code == LV_EVENT_CLICKED) {
+        sysman_msg_t msg = {.type = SYSMAN_MSG_ARM_ALARMS};
+        xQueueSend(sysman_queue, &msg, 0);
         lv_screen_load(ui_Running);
     }
 }
@@ -389,11 +391,13 @@ static void display_ui_app_init(void)
         lv_obj_add_event_cb(ui_bar_corriente, on_slider_changed, LV_EVENT_VALUE_CHANGED, NULL);
     }
     if (ui_bar_voltaje_limit_set) {
+        lv_slider_set_range(ui_bar_voltaje_limit_set, 0, 1500); // 0 a 15.00V
         lv_group_add_obj(lv_group_get_default(), ui_bar_voltaje_limit_set);
         lv_obj_add_event_cb(ui_bar_voltaje_limit_set, ui_event_bar_voltaje_limit_set, LV_EVENT_CLICKED, NULL);
         lv_obj_add_event_cb(ui_bar_voltaje_limit_set, on_slider_changed, LV_EVENT_VALUE_CHANGED, NULL);
     }
     if (ui_bar_corr_limit) {
+        lv_slider_set_range(ui_bar_corr_limit, 0, 500); // 0 a 0.500A
         lv_group_add_obj(lv_group_get_default(), ui_bar_corr_limit);
         lv_obj_add_event_cb(ui_bar_corr_limit, ui_event_start_running, LV_EVENT_CLICKED, NULL);
         lv_obj_add_event_cb(ui_bar_corr_limit, on_slider_changed, LV_EVENT_VALUE_CHANGED, NULL);
@@ -429,10 +433,21 @@ void task_display_update(void *pvParameters)
             ui_update_t msg;
             while (xQueueReceive(display_queue, &msg, 0) == pdTRUE) {
                 if (msg.source == UI_MSG_FROM_ADC) {
-                    float power = msg.voltage * msg.current;
-                    if (uic_voltaje_actual) lv_label_set_text_fmt(uic_voltaje_actual, "%.2f V", msg.voltage);
-                    if (uic_corriente_actual) lv_label_set_text_fmt(uic_corriente_actual, "%.3f A", msg.current);
-                    if (uic_potencia_actual) lv_label_set_text_fmt(uic_potencia_actual, "%.2f W", power);
+                    int voltage_centivolts = (int)(msg.voltage * 100.0f + 0.5f);
+                    int current_milliamps = (int)(msg.current * 1000.0f + 0.5f);
+                    int power_cent_watts = (int)(msg.voltage * msg.current * 100.0f + 0.5f);
+                    if (uic_voltaje_actual) {
+                        lv_label_set_text_fmt(uic_voltaje_actual, "%d.%02d V",
+                                              voltage_centivolts / 100, voltage_centivolts % 100);
+                    }
+                    if (uic_corriente_actual) {
+                        lv_label_set_text_fmt(uic_corriente_actual, "%d.%03d A",
+                                              current_milliamps / 1000, current_milliamps % 1000);
+                    }
+                    if (uic_potencia_actual) {
+                        lv_label_set_text_fmt(uic_potencia_actual, "%d.%02d W",
+                                              power_cent_watts / 100, power_cent_watts % 100);
+                    }
                 } else if (msg.source == UI_MSG_FROM_SYSMAN) {
                     if (uic_modo_actual) {
                         if (msg.mode == MODE_CC) lv_label_set_text(uic_modo_actual, "CC");

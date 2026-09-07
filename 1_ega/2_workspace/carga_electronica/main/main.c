@@ -4,6 +4,7 @@
 #include "freertos/queue.h"
 #include "driver/i2c.h"
 #include "esp_log.h"
+#include "esp_system.h"
 
 // Componentes
 #include "mcp4725.h"
@@ -28,6 +29,10 @@ QueueHandle_t sysman_queue = NULL; // Recibe órdenes desde LVGL (pantalla)
 
 
 void app_main(void) {
+    esp_reset_reason_t reset_reason = esp_reset_reason();
+    ESP_LOGI("MAIN", "Causa del ultimo reset: %d", reset_reason);
+    ESP_LOGI("MAIN", "Heap libre al arrancar: %lu bytes", (unsigned long)esp_get_free_heap_size());
+
    // Actualizamos el Log para reflejar la integración de los gráficos
     ESP_LOGI("MAIN", "Iniciando Fase 4: Visualización Gráfica (TFT + LVGL)...");
 

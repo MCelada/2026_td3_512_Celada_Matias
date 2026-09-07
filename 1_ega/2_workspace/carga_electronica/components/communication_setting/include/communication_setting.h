@@ -17,7 +17,7 @@ extern "C" {
 #define I2C_MASTER_NUM              I2C_NUM_0
 #define I2C_MASTER_SDA_IO           8
 #define I2C_MASTER_SCL_IO           9
-#define I2C_MASTER_FREQ_HZ          50000    // 50kHz para mejorar estabilidad del bus
+#define I2C_MASTER_FREQ_HZ          100000   // 100kHz para evitar ruido en protoboard
 
 // // --- SPI (DISPLAY TFT) ---
 #define LCD_HOST                    SPI2_HOST

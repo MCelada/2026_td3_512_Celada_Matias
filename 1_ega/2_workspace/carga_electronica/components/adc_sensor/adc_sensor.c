@@ -14,9 +14,35 @@
 
 static const char *TAG = "ADC_SENSOR";
 
-// Factores de escala
-#define SCALE_VOLTAGE       1.0f 
-#define SCALE_CURRENT       1.0f 
+// Puntos de calibracion: tension medida en el pin ADC y valor real.
+static const float voltage_adc_mv[] = {60.0f, 360.0f, 610.0f, 850.0f, 1170.0f, 1360.0f, 1510.0f};
+static const float voltage_real_v[] = {0.0f, 0.5f, 1.5f, 2.5f, 4.5f, 6.5f, 9.5f};
+
+// Puntos de calibracion: Vsense medida en el pin ADC y corriente real.
+static const float current_adc_mv[] = {80.0f, 610.0f, 1080.0f, 1620.0f, 2070.0f};
+static const float current_real_a[] = {0.0f, 0.035f, 0.085f, 0.135f, 0.185f};
+
+static float interpolate_calibration(float adc_mv, const float *adc_points,
+                                     const float *real_points, size_t point_count)
+{
+    if (adc_mv <= adc_points[0]) {
+        return real_points[0];
+    }
+    for (size_t index = 1; index < point_count; index++) {
+        if (adc_mv <= adc_points[index]) {
+            float adc_span = adc_points[index] - adc_points[index - 1];
+            float real_span = real_points[index] - real_points[index - 1];
+            float fraction = (adc_mv - adc_points[index - 1]) / adc_span;
+            return real_points[index - 1] + fraction * real_span;
+        }
+    }
+
+    // Extrapola el ultimo tramo para no ocultar sobrecorrientes fuera de tabla.
+    float adc_span = adc_points[point_count - 1] - adc_points[point_count - 2];
+    float real_span = real_points[point_count - 1] - real_points[point_count - 2];
+    float fraction = (adc_mv - adc_points[point_count - 2]) / adc_span;
+    return real_points[point_count - 2] + fraction * real_span;
+}
 
 // Cola de datos para enviar las mediciones a otras tareas
 extern QueueHandle_t adc_queue;
@@ -98,15 +124,19 @@ void task_adc_read(void *pvParameters) {
 
         // D. Aplicamos las escalas de nuestro hardware
         sensor_data_t final_data;
-        final_data.voltage_v = (filtered_voltage / 1000.0f) * SCALE_VOLTAGE;
-        final_data.current_a = (filtered_current / 1000.0f) * SCALE_CURRENT;
+        final_data.voltage_v = interpolate_calibration(
+            filtered_voltage, voltage_adc_mv, voltage_real_v,
+            sizeof(voltage_adc_mv) / sizeof(voltage_adc_mv[0]));
+        final_data.current_a = interpolate_calibration(
+            filtered_current, current_adc_mv, current_real_a,
+            sizeof(current_adc_mv) / sizeof(current_adc_mv[0]));
 
-        // --- VALORES FIJOS DE PRUEBA ---
-        final_data.voltage_v = 11.0f;
-        final_data.current_a = 0.120f;
 
         // E. Imprimimos por consola para Diagnóstico (Opcional, puedes comentarlo luego si hace mucho "spam")
-        ESP_LOGI(TAG, "Voltaje: %.2f V | Corriente: %.2f A", final_data.voltage_v, final_data.current_a);
+        ESP_LOGI(TAG,
+             "ADC V raw=%d (%d mV) -> %.2f V | ADC I raw=%d (%d mV) -> %.2f A",
+             raw_voltage, mv_voltage, final_data.voltage_v,
+             raw_current, mv_current, final_data.current_a);
 
         // --- 1. ENVÍO AL PID (Lazo de Control) ---
         if (adc_queue != NULL) {

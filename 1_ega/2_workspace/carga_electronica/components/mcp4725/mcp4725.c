@@ -13,7 +13,6 @@ static const char *TAG = "DAC_HARDWARE";
 
 extern QueueHandle_t dac_queue;
 extern SemaphoreHandle_t i2c_mutex;
-esp_err_t communication_i2c_init(void);
 
 void task_dac_update(void *pvParameters) {
     uint16_t dac_value = 0;
@@ -33,31 +32,15 @@ void task_dac_update(void *pvParameters) {
             data_buffer[1] = (uint8_t)(dac_value & 0xFF);
 
             // SECCIÓN CRÍTICA: Tomamos el candado del I2C para que nadie nos interrumpa
-            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-
+            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+                
                 esp_err_t err = i2c_master_write_to_device(
                     I2C_MASTER_NUM,
                     MCP4725_ADDR,
                     data_buffer,
                     sizeof(data_buffer),
-                    pdMS_TO_TICKS(150)
+                    pdMS_TO_TICKS(50) // Timeout corto de 5ms
                 );
-
-                if (err == ESP_ERR_TIMEOUT) {
-                    ESP_LOGW(TAG, "Timeout en DAC, reintentando tras reinicializar I2C");
-                    i2c_driver_delete(I2C_MASTER_NUM);
-                    if (communication_i2c_init() == ESP_OK) {
-                        err = i2c_master_write_to_device(
-                            I2C_MASTER_NUM,
-                            MCP4725_ADDR,
-                            data_buffer,
-                            sizeof(data_buffer),
-                            pdMS_TO_TICKS(150)
-                        );
-                    } else {
-                        ESP_LOGE(TAG, "No se pudo reinicializar I2C");
-                    }
-                }
 
                 // Soltamos el candado inmediatamente al terminar la transmisión
                 xSemaphoreGive(i2c_mutex);

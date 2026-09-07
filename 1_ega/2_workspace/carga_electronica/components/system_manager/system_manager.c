@@ -31,12 +31,17 @@ void task_system_manager(void *pvParameters) {
     gpio_set_level(ALARM_OCP_PIN, 0);
 
     // Enviamos una configuración inicial al arrancar para que el PID no empiece en el aire
-    pid_config_t initial_cfg = {.mode = MODE_CC, .setpoint = 0.0f};
+    pid_config_t initial_cfg = {
+        .mode = MODE_CC,
+        .setpoint = 0.0f,
+        .force_stop = false,
+    };
     xQueueOverwrite(pid_cfg_queue, &initial_cfg);
 
     float limit_ovp = 15.0f; // Default OVP 15V
     float limit_ocp = 0.5f;  // Default OCP 500mA
     bool alarm_active = false;
+    bool alarms_armed = false;
 
     // --- NUEVO: Enviamos el estado inicial a la pantalla al arrancar ---
     if (display_queue != NULL) {
@@ -75,10 +80,26 @@ void task_system_manager(void *pvParameters) {
                     limit_ocp = msg.data.alarm_limit.new_limit;
                     ESP_LOGI(TAG, "Nuevo límite OCP: %.3f A", limit_ocp);
                 }
+            } else if (msg.type == SYSMAN_MSG_ARM_ALARMS) {
+                alarm_active = false;
+                alarms_armed = true;
+                gpio_set_level(ALARM_OVP_PIN, 0);
+                gpio_set_level(ALARM_OCP_PIN, 0);
+                update_needed = true;
+                ESP_LOGI(TAG, "Alarmas armadas para RUNNING: OVP %.2f V, OCP %.3f A",
+                         limit_ovp, limit_ocp);
             } else if (msg.type == SYSMAN_MSG_ADC_UPDATE) {
                 // Chequeo de límites (ALARMAS)
+                if (!alarm_active && !alarms_armed) {
+                    continue;
+                }
                 bool trigger_ovp = (msg.data.adc.voltage > limit_ovp);
                 bool trigger_ocp = (msg.data.adc.current > limit_ocp);
+
+                if (trigger_ocp) {
+                    ESP_LOGW(TAG, "OCP: %.3f A supera limite %.3f A",
+                             msg.data.adc.current, limit_ocp);
+                }
                 
                 if ((trigger_ovp || trigger_ocp) && !alarm_active) {
                     alarm_active = true;

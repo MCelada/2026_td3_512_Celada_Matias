@@ -10,9 +10,9 @@ static const char *TAG = "PID_CEREBRO";
 
 // --- CONSTANTES DEL PID (Sintonización inicial básica) ---
 // Deberás calibrar estos números basándote en tu hardware real
-#define KP      150.0f
-#define KI      45.0f
-#define KD      5.0f
+#define KP      800.0f
+#define KI      150.0f
+#define KD      0.0f
 
 extern QueueHandle_t adc_queue;
 extern QueueHandle_t pid_cfg_queue;
@@ -27,6 +27,7 @@ void task_pid_compute(void *pvParameters) {
     // Estado local copiado de la cola del System Manager
     pid_config_t current_cfg = {.mode = MODE_CC, .setpoint = 0.0f};
     sensor_data_t current_readings;
+    pid_config_t previous_cfg = current_cfg;
 
     ESP_LOGI(TAG, "Controlador PID listo y sincronizado con el ADC.");
 
@@ -36,6 +37,14 @@ void task_pid_compute(void *pvParameters) {
             
             // 2. Revisamos de paso si el usuario cambió el setpoint o modo (sin bloquear)
             xQueueReceive(pid_cfg_queue, &current_cfg, 0);
+
+            if (current_cfg.mode != previous_cfg.mode ||
+                current_cfg.setpoint != previous_cfg.setpoint ||
+                current_cfg.force_stop != previous_cfg.force_stop) {
+                integral = 0.0f;
+                last_error = 0.0f;
+                previous_cfg = current_cfg;
+            }
 
             float target_current = 0.0f;
 
@@ -59,24 +68,23 @@ void task_pid_compute(void *pvParameters) {
 
             // 4. ALGORITMO PID
             error = target_current - current_readings.current_a; // Error = Deseo - Realidad
-            
-            // Término Integral con anti-windup (limitador para que no crezca hasta el infinito)
-            integral += error * dt;
-            if (integral > 4095.0f) integral = 4095.0f;
-            if (integral < 0.0f) integral = 0.0f;
-            
-            if (current_cfg.force_stop) {
-                integral = 0.0f; // Asegurar que no haya acción integral
-                error = 0.0f; // Asegurar que no haya acción derivativa/proporcional residual
+
+            // La salida solo puede aumentar la conducción. Si ya hay mas corriente
+            // que la solicitada, retirar inmediatamente toda la orden acumulada.
+            if (error <= 0.0f || current_cfg.force_stop) {
+                integral = 0.0f;
+                derivative = 0.0f;
+                last_error = error;
+                output = 0.0f;
+            } else {
+                integral += error * dt;
+                if (integral > 4095.0f) integral = 4095.0f;
+
+                derivative = (error - last_error) / dt;
+                last_error = error;
+                output = (error * KP) + (integral * KI) + (derivative * KD);
             }
-
-            // Término Derivativo
-            derivative = (error - last_error) / dt;
-            last_error = error;
-
-            // Ecuación final
-            output = (error * KP) + (integral * KI) + (derivative * KD);
-
+            
             // Acotamos la salida al rango físico real del DAC (0V a 3.3V mapeado en 12 bits)
             if (output > 4095.0f) output = 4095.0f;
             if (output < 0.0f) output = 0.0f;
@@ -86,7 +94,7 @@ void task_pid_compute(void *pvParameters) {
             xQueueSend(dac_queue, &dac_output_digital, 0);
 
             // Registro de telemetría de control para debugging de precisión
-            ESP_LOGD(TAG, "Target: %.2f A | Real: %.2f A | Error: %.2f | DAC Out: %d", 
+            ESP_LOGI(TAG, "Target: %.2f A | Real: %.2f A | Error: %.2f | DAC Out: %d",
                      target_current, current_readings.current_a, error, dac_output_digital);
         }
     }
